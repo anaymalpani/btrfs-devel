@@ -7528,6 +7528,7 @@ search:
 		    u64 extra = BTRFS_BLOCK_GROUP_DUP |
 				BTRFS_BLOCK_GROUP_RAID1 |
 				BTRFS_BLOCK_GROUP_RAID1C3 |
+				BTRFS_BLOCK_GROUP_RAID1C4 |
 				BTRFS_BLOCK_GROUP_RAID5 |
 				BTRFS_BLOCK_GROUP_RAID6 |
 				BTRFS_BLOCK_GROUP_RAID10;
@@ -9332,6 +9333,7 @@ static u64 update_block_group_flags(struct btrfs_fs_info *fs_info, u64 flags)
 	num_devices = fs_info->fs_devices->rw_devices;
 
 	ASSERT(!(flags & BTRFS_BLOCK_GROUP_RAID1C3));
+	ASSERT(!(flags & BTRFS_BLOCK_GROUP_RAID1C4));
 
 	stripped = BTRFS_BLOCK_GROUP_RAID0 |
 		BTRFS_BLOCK_GROUP_RAID5 | BTRFS_BLOCK_GROUP_RAID6 |
@@ -10147,6 +10149,7 @@ int btrfs_read_block_groups(struct btrfs_fs_info *info)
 		      (BTRFS_BLOCK_GROUP_RAID10 |
 		       BTRFS_BLOCK_GROUP_RAID1 |
 		       BTRFS_BLOCK_GROUP_RAID1C3 |
+		       BTRFS_BLOCK_GROUP_RAID1C4 |
 		       BTRFS_BLOCK_GROUP_RAID5 |
 		       BTRFS_BLOCK_GROUP_RAID6 |
 		       BTRFS_BLOCK_GROUP_DUP)))

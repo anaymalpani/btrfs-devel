@@ -1980,6 +1980,9 @@ static int btrfs_calc_avail_data_space(struct btrfs_fs_info *fs_info,
 	} else if (type & BTRFS_BLOCK_GROUP_RAID1C3) {
 		min_stripes = 3;
 		num_stripes = 3;
+	} else if (type & BTRFS_BLOCK_GROUP_RAID1C4) {
+		min_stripes = 4;
+		num_stripes = 4;
 	} else if (type & BTRFS_BLOCK_GROUP_RAID10) {
 		min_stripes = 4;
 		num_stripes = 4;
