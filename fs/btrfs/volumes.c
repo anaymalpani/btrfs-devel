@@ -116,6 +116,18 @@ const struct btrfs_raid_attr btrfs_raid_array[BTRFS_NR_RAID_TYPES] = {
 		.bg_flag	= BTRFS_BLOCK_GROUP_RAID6,
 		.mindev_error	= BTRFS_ERROR_DEV_RAID6_MIN_NOT_MET,
 	},
+	[BTRFS_RAID_RAID1C3] = {
+		.sub_stripes	= 1,
+		.dev_stripes	= 1,
+		.devs_max	= 0,
+		.devs_min	= 3,
+		.tolerated_failures = 2,
+		.devs_increment	= 3,
+		.ncopies	= 3,
+		.raid_name	= "raid1c3",
+		.bg_flag	= BTRFS_BLOCK_GROUP_RAID1C3,
+		.mindev_error	= BTRFS_ERROR_DEV_RAID1C3_MIN_NOT_MET,
+	},
 };
 
 const char *get_raid_name(enum btrfs_raid_types type)
@@ -3336,6 +3348,8 @@ static int chunk_drange_filter(struct extent_buffer *leaf,
 	if (btrfs_chunk_type(leaf, chunk) & (BTRFS_BLOCK_GROUP_DUP |
 	     BTRFS_BLOCK_GROUP_RAID1 | BTRFS_BLOCK_GROUP_RAID10)) {
 		factor = num_stripes / 2;
+	} else if (btrfs_chunk_type(leaf, chunk) & BTRFS_BLOCK_GROUP_RAID1C3) {
+		factor = num_stripes / 3;
 	} else if (btrfs_chunk_type(leaf, chunk) & BTRFS_BLOCK_GROUP_RAID5) {
 		factor = num_stripes - 1;
 	} else if (btrfs_chunk_type(leaf, chunk) & BTRFS_BLOCK_GROUP_RAID6) {
@@ -3822,7 +3836,7 @@ int btrfs_balance(struct btrfs_fs_info *fs_info,
 	if (num_devices > 1)
 		allowed |= (BTRFS_BLOCK_GROUP_RAID0 | BTRFS_BLOCK_GROUP_RAID1);
 	if (num_devices > 2)
-		allowed |= BTRFS_BLOCK_GROUP_RAID5;
+		allowed |= BTRFS_BLOCK_GROUP_RAID5 | BTRFS_BLOCK_GROUP_RAID1C3;
 	if (num_devices > 3)
 		allowed |= (BTRFS_BLOCK_GROUP_RAID10 |
 			    BTRFS_BLOCK_GROUP_RAID6);
@@ -3856,6 +3870,7 @@ int btrfs_balance(struct btrfs_fs_info *fs_info,
 
 	/* allow to reduce meta or sys integrity only if force set */
 	allowed = BTRFS_BLOCK_GROUP_DUP | BTRFS_BLOCK_GROUP_RAID1 |
+			BTRFS_BLOCK_GROUP_RAID1C3 |
 			BTRFS_BLOCK_GROUP_RAID10 |
 			BTRFS_BLOCK_GROUP_RAID5 |
 			BTRFS_BLOCK_GROUP_RAID6;
@@ -4787,8 +4802,11 @@ static int __btrfs_alloc_chunk(struct btrfs_trans_handle *trans,
 	sort(devices_info, ndevs, sizeof(struct btrfs_device_info),
 	     btrfs_cmp_device_info, NULL);
 
-	/* round down to number of usable stripes */
-	ndevs = round_down(ndevs, devs_increment);
+	/*
+	 * Round down to number of usable stripes, devs_increment can be any
+	 * number so we can't use round_down()
+	 */
+	ndevs -= ndevs % devs_increment;
 
 	if (ndevs < devs_min) {
 		ret = -ENOSPC;
@@ -5075,6 +5093,8 @@ static inline int btrfs_chunk_max_errors(struct map_lookup *map)
 			 BTRFS_BLOCK_GROUP_RAID5 |
 			 BTRFS_BLOCK_GROUP_DUP)) {
 		max_errors = 1;
+	} else if (map->type & BTRFS_BLOCK_GROUP_RAID1C3) {
+		max_errors = 2;
 	} else if (map->type & BTRFS_BLOCK_GROUP_RAID6) {
 		max_errors = 2;
 	} else {
@@ -5163,7 +5183,8 @@ int btrfs_num_copies(struct btrfs_fs_info *fs_info, u64 logical, u64 len)
 		return 1;
 
 	map = em->map_lookup;
-	if (map->type & (BTRFS_BLOCK_GROUP_DUP | BTRFS_BLOCK_GROUP_RAID1))
+	if (map->type & (BTRFS_BLOCK_GROUP_DUP | BTRFS_BLOCK_GROUP_RAID1 |
+			 BTRFS_BLOCK_GROUP_RAID1C3))
 		ret = map->num_stripes;
 	else if (map->type & BTRFS_BLOCK_GROUP_RAID10)
 		ret = map->sub_stripes;
@@ -5237,7 +5258,9 @@ static int find_live_mirror(struct btrfs_fs_info *fs_info,
 	struct btrfs_device *srcdev;
 
 	ASSERT((map->type &
-		 (BTRFS_BLOCK_GROUP_RAID1 | BTRFS_BLOCK_GROUP_RAID10)));
+		 (BTRFS_BLOCK_GROUP_RAID1 |
+		  BTRFS_BLOCK_GROUP_RAID1C3 |
+		  BTRFS_BLOCK_GROUP_RAID10)));
 
 	if (map->type & BTRFS_BLOCK_GROUP_RAID10)
 		num_stripes = map->sub_stripes;
@@ -5427,6 +5450,7 @@ static int __btrfs_map_block_for_discard(struct btrfs_fs_info *fs_info,
 		div_u64_rem(stripe_nr_end - 1, factor, &last_stripe);
 		last_stripe *= sub_stripes;
 	} else if (map->type & (BTRFS_BLOCK_GROUP_RAID1 |
+				BTRFS_BLOCK_GROUP_RAID1C3 |
 				BTRFS_BLOCK_GROUP_DUP)) {
 		num_stripes = map->num_stripes;
 	} else {
@@ -5792,7 +5816,8 @@ static int __btrfs_map_block(struct btrfs_fs_info *fs_info,
 				&stripe_index);
 		if (!need_full_stripe(op))
 			mirror_num = 1;
-	} else if (map->type & BTRFS_BLOCK_GROUP_RAID1) {
+	} else if (map->type & (BTRFS_BLOCK_GROUP_RAID1 |
+				BTRFS_BLOCK_GROUP_RAID1C3)) {
 		if (need_full_stripe(op))
 			num_stripes = map->num_stripes;
 		else if (mirror_num)
@@ -6441,6 +6466,7 @@ static int btrfs_check_chunk_valid(struct btrfs_fs_info *fs_info,
 	}
 	if ((type & BTRFS_BLOCK_GROUP_RAID10 && sub_stripes != 2) ||
 	    (type & BTRFS_BLOCK_GROUP_RAID1 && num_stripes < 1) ||
+	    (type & BTRFS_BLOCK_GROUP_RAID1C3 && num_stripes < 3) ||
 	    (type & BTRFS_BLOCK_GROUP_RAID5 && num_stripes < 2) ||
 	    (type & BTRFS_BLOCK_GROUP_RAID6 && num_stripes < 3) ||
 	    (type & BTRFS_BLOCK_GROUP_DUP && num_stripes > 2) ||
@@ -7389,5 +7415,7 @@ int btrfs_bg_type_to_factor(u64 flags)
 	if (flags & (BTRFS_BLOCK_GROUP_DUP | BTRFS_BLOCK_GROUP_RAID1 |
 		     BTRFS_BLOCK_GROUP_RAID10))
 		return 2;
+	if (flags & BTRFS_BLOCK_GROUP_RAID1C3)
+		return 3;
 	return 1;
 }

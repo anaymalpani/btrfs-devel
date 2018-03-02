@@ -4339,6 +4339,7 @@ static void describe_relocation(struct btrfs_fs_info *fs_info,
 		DESCRIBE_FLAG(METADATA, "metadata");
 		DESCRIBE_FLAG(RAID0,    "raid0");
 		DESCRIBE_FLAG(RAID1,    "raid1");
+		DESCRIBE_FLAG(RAID1C3,  "raid1c3");
 		DESCRIBE_FLAG(DUP,      "dup");
 		DESCRIBE_FLAG(RAID10,   "raid10");
 		DESCRIBE_FLAG(RAID5,    "raid5");

@@ -7527,6 +7527,7 @@ search:
 		if (!block_group_bits(block_group, flags)) {
 		    u64 extra = BTRFS_BLOCK_GROUP_DUP |
 				BTRFS_BLOCK_GROUP_RAID1 |
+				BTRFS_BLOCK_GROUP_RAID1C3 |
 				BTRFS_BLOCK_GROUP_RAID5 |
 				BTRFS_BLOCK_GROUP_RAID6 |
 				BTRFS_BLOCK_GROUP_RAID10;
@@ -9330,6 +9331,8 @@ static u64 update_block_group_flags(struct btrfs_fs_info *fs_info, u64 flags)
 
 	num_devices = fs_info->fs_devices->rw_devices;
 
+	ASSERT(!(flags & BTRFS_BLOCK_GROUP_RAID1C3));
+
 	stripped = BTRFS_BLOCK_GROUP_RAID0 |
 		BTRFS_BLOCK_GROUP_RAID5 | BTRFS_BLOCK_GROUP_RAID6 |
 		BTRFS_BLOCK_GROUP_RAID1 | BTRFS_BLOCK_GROUP_RAID10;
@@ -9647,6 +9650,8 @@ int btrfs_can_relocate(struct btrfs_fs_info *fs_info, u64 bytenr)
 		min_free >>= 1;
 	} else if (index == BTRFS_RAID_RAID1) {
 		dev_min = 2;
+	} else if (index == BTRFS_RAID_RAID1C3) {
+		dev_min = 3;
 	} else if (index == BTRFS_RAID_DUP) {
 		/* Multiply by 2 */
 		min_free <<= 1;
@@ -10141,6 +10146,7 @@ int btrfs_read_block_groups(struct btrfs_fs_info *info)
 		if (!(get_alloc_profile(info, space_info->flags) &
 		      (BTRFS_BLOCK_GROUP_RAID10 |
 		       BTRFS_BLOCK_GROUP_RAID1 |
+		       BTRFS_BLOCK_GROUP_RAID1C3 |
 		       BTRFS_BLOCK_GROUP_RAID5 |
 		       BTRFS_BLOCK_GROUP_RAID6 |
 		       BTRFS_BLOCK_GROUP_DUP)))
