@@ -4663,6 +4663,14 @@ static void check_raid56_incompat_flag(struct btrfs_fs_info *info, u64 type)
 	btrfs_set_fs_incompat(info, RAID56);
 }
 
+static void check_extended_raid_incompat_flag(struct btrfs_fs_info *info, u64 type)
+{
+	if (!(type & (BTRFS_BLOCK_GROUP_RAID1C3 | BTRFS_BLOCK_GROUP_RAID1C4)))
+		return;
+
+	btrfs_set_fs_incompat(info, EXTENDED_RAID);
+}
+
 #define BTRFS_MAX_DEVS(info) ((BTRFS_MAX_ITEM_SIZE(info)	\
 			- sizeof(struct btrfs_chunk))		\
 			/ sizeof(struct btrfs_stripe) + 1)
@@ -4945,6 +4953,7 @@ static int __btrfs_alloc_chunk(struct btrfs_trans_handle *trans,
 
 	free_extent_map(em);
 	check_raid56_incompat_flag(info, type);
+	check_extended_raid_incompat_flag(info, type);
 
 	kfree(devices_info);
 	return 0;
